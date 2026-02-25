@@ -153,7 +153,7 @@ ScaledRelativeGraphs.jl/
 
 This package accompanies the manuscript:
 
-> S. Lezama, "From Nyquist to Scaled Relative Graphs: A Computational Tutorial for Nonlinear Stability Analysis with Power Systems Applications," *submitted to [journal]*, 2026.
+> S. Ramharack and J. Nancoo, "From Nyquist to Scaled Relative Graphs: A Computational Tutorial for Nonlinear Stability Analysis with Power Systems Applications," *submitted to [journal]*, 2026.
 
 The `paper/` directory contains scripts to reproduce all figures in the manuscript.
 
