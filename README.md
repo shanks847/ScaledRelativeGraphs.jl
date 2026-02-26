@@ -1,4 +1,5 @@
 # ScaledRelativeGraphs.jl
+[WORK IN PROGRESS]
 
 **Geometric stability analysis for industrial control systems — from classical Nyquist to nonlinear robustness certificates.**
 
