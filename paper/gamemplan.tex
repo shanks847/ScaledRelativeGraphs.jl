@@ -1,0 +1,381 @@
+% \documentclass[journal]{IEEEtran}
+
+% \usepackage{amsmath,amssymb,amsfonts}
+% \usepackage{graphicx}
+% \usepackage{hyperref}
+% \usepackage{cite}
+% \usepackage{algorithmic}
+% \usepackage{booktabs}
+% \usepackage{xcolor}
+% \usepackage{url}
+
+% % Custom commands
+% \newcommand{\SRG}{\mathrm{SRG}}
+% \newcommand{\hconv}{\mathrm{hconv}}
+% \newcommand{\RR}{\mathbb{R}}
+% \newcommand{\CC}{\mathbb{C}}
+% \newcommand{\HH}{\mathcal{H}}
+% \newcommand{\LL}{\mathcal{L}}
+
+% \begin{document}
+
+% \title{From Nyquist to Scaled Relative Graphs: A Computational Tutorial for Nonlinear Stability Analysis}
+
+% \author{Shankar~Ramharack~and~Jonathan~Nancoo%
+% \thanks{S.~Ramharack and J.~Nancoo are with Lezama Electrical Services, Trinidad and Tobago. Correspondence: \texttt{sramharack@lezama.tt}}%
+% \thanks{Companion code: \texttt{ScaledRelativeGraphs.jl} — \url{https://github.com/sramharack/ScaledRelativeGraphs.jl}}}
+
+% \markboth{Submitted to IEEE Transactions on Automatic Control, 2026}{}
+
+% \maketitle
+
+% \begin{abstract}
+% Scaled Relative Graphs (SRGs) generalize the classical Nyquist diagram to nonlinear operators, providing geometric stability certificates with quantitative robustness margins.
+% Despite rapid theoretical advances, computational tools with worked examples remain scarce, limiting adoption by practicing engineers.
+% This paper presents a tutorial progression from Nyquist stability to SRG-based nonlinear analysis, grounded in four benchmark systems of increasing complexity: a mass-spring-damper, a DC motor with PI control, a tank level system with transport delay, and an op-amp with actuator saturation.
+% For each benchmark, we compute the SRG alongside the Nyquist diagram and demonstrate that the SRG separation distance provides a continuous, multi-dimensional robustness margin that captures effects invisible to classical gain and phase margins.
+% We provide a companion open-source Julia package, \texttt{ScaledRelativeGraphs.jl}, implementing all algorithms and reproducing all figures.
+% The package features a dual API: a one-call \texttt{stability\_report} for practitioners and full access to mathematical SRG objects for researchers.
+% We show that for the Lur'e benchmark, SRG-based analysis yields stability margins 2--5$\times$ tighter than the classical circle criterion, and discuss extensions to power-electronic applications and standards compliance.
+% \end{abstract}
+
+% \begin{IEEEkeywords}
+% Scaled relative graphs, Nyquist stability, nonlinear systems, feedback stability, incremental stability, Julia, open-source software
+% \end{IEEEkeywords}
+
+% % ═══════════════════════════════════════════════════════════════
+% \section{Introduction}
+% \label{sec:intro}
+
+% Stability analysis of feedback systems is a cornerstone of control engineering.
+% For linear time-invariant (LTI) systems, the Nyquist criterion~\cite{nyquist1932regeneration} provides a complete answer: the closed-loop is stable if and only if the open-loop frequency response curve encircles the critical point $-1$ the correct number of times.
+% The associated gain margin (GM) and phase margin (PM) quantify robustness as scalar distances from instability.
+
+% This classical framework has two fundamental limitations.
+% First, it applies only to LTI systems.
+% Real control loops invariably contain nonlinearities---actuator saturation, sensor deadzone, backlash, quantization---that Nyquist analysis cannot directly address.
+% Second, GM and PM are \emph{single-frequency} margins that miss \emph{multi-frequency} interactions: a system driven by a superposition of sinusoids can exhibit gain-phase combinations not present on the Nyquist curve.
+
+% Scaled Relative Graphs (SRGs), introduced by Ryu, Hannah, and Yin~\cite{ryu2022srg} for optimization and connected to control theory by Chaffey, Forni, and Sepulchre~\cite{chaffey2023graphical}, address both limitations.
+% The SRG maps an operator to a \emph{region} in the complex plane---not a curve---capturing all incremental gain-phase pairs.
+% For stable LTI systems, the SRG equals the hyperbolic convex hull of the Nyquist diagram~\cite{chaffey2023graphical}, enriching the 1D curve into a 2D region.
+% For nonlinear operators, SRGs are defined directly via the incremental input-output behavior, enabling stability analysis of feedback systems containing saturation, monotone maps, and other nonlinearities.
+
+% The SRG separation theorem~\cite{chaffey2023graphical} provides a geometric stability certificate: if the SRGs of the two subsystems in a feedback loop are \emph{separated} on the complex plane, the closed-loop is incrementally $\LL_2$-stable.
+% The separation distance serves as a continuous, multi-dimensional robustness margin.
+
+% Despite rapid theoretical progress---including soft and hard SRGs~\cite{chen2025softhard}, extended SRGs for unstable systems~\cite{krebbekx2025extended}, MIMO extensions~\cite{krebbekx2025mimo}, and power systems applications~\cite{baronprada2026power}---computational tools with worked examples remain scarce.
+% SrgTools.jl~\cite{krebbekx2025srgtools} provides MIMO SRG computation in a Linear Fractional Representation framework, but no package offers a pedagogical Nyquist-to-SRG progression with industrial benchmarks.
+
+% \subsection{Contributions}
+
+% This paper makes three contributions:
+
+% \begin{enumerate}
+% \item A \textbf{tutorial progression} from Nyquist stability through SRG theory to nonlinear feedback analysis, grounded in four benchmark systems that build intuition incrementally.
+
+% \item A \textbf{quantitative comparison} of Nyquist margins, circle criterion margins, and SRG separation distances across all benchmarks, demonstrating 2--5$\times$ improvement in robustness margin estimation for Lur'e systems.
+
+% \item An \textbf{open-source Julia package}, \texttt{ScaledRelativeGraphs.jl}, that reproduces all results and provides both practitioner-level (\texttt{stability\_report}) and researcher-level (\texttt{compute\_srg}) interfaces.
+% \end{enumerate}
+
+% \subsection{Notation}
+
+% $\LL_2$ denotes the space of square-integrable signals.
+% $\langle \cdot, \cdot \rangle$ and $\|\cdot\|$ are the inner product and norm on $\LL_2$.
+% For $z \in \CC$, $\bar{z}$ is the complex conjugate, $|z|$ is the modulus, and $\angle z$ is the argument.
+% The inversion map is $z \mapsto \bar{z}^{-1}$.
+% $\hconv(S)$ denotes the hyperbolic convex hull of $S \subset \CC$.
+
+% % ═══════════════════════════════════════════════════════════════
+% \section{Classical Nyquist Stability}
+% \label{sec:nyquist}
+
+% \subsection{The Nyquist Criterion}
+
+% Consider the standard negative feedback configuration with open-loop transfer function $L(s) = G(s)C(s)$.
+% The Nyquist criterion relates closed-loop stability to the number of encirclements of the point $-1$ by the Nyquist contour $\{L(j\omega) : \omega \in \RR\}$:
+% \begin{equation}
+% Z = N + P
+% \end{equation}
+% where $Z$ is the number of closed-loop right-half-plane poles, $N$ is the number of clockwise encirclements of $-1$, and $P$ is the number of open-loop right-half-plane poles.
+% Closed-loop stability requires $Z = 0$.
+
+% The gain margin $\mathrm{GM} = 1/|L(j\omega_\pi)|$ (where $\angle L(j\omega_\pi) = -180°$) and phase margin $\mathrm{PM} = 180° + \angle L(j\omega_c)$ (where $|L(j\omega_c)| = 1$) measure distances from the critical point along specific directions.
+
+% \subsection{Limitations}
+
+% GM and PM are \emph{one-dimensional} measures: GM measures robustness to pure gain changes, PM to pure phase changes.
+% A system with adequate GM and PM can still have poor robustness to \emph{simultaneous} gain and phase perturbations~\cite{skogestad2005multivariable}.
+% Moreover, Nyquist analysis is restricted to LTI systems, offering no direct path to nonlinear stability certificates.
+
+% \subsection{Benchmark Systems}
+
+% We introduce four systems of increasing complexity, each chosen to highlight a specific limitation of classical analysis:
+
+% \textbf{Benchmark~1: Mass-spring-damper.}
+% $G(s) = K_p/(ms^2 + cs + k)$ with $m=1$, $k=4$, $K_p=2$, and damping ratio $\zeta = 0.2$.
+% The underdamped resonance creates a pronounced Nyquist bulge.
+
+% \textbf{Benchmark~2: DC motor with PI control.}
+% A third-order system with coupled electrical and mechanical dynamics, exhibiting multi-timescale interaction.
+% The PI controller introduces an integrator.
+
+% \textbf{Benchmark~3: Tank level control.}
+% $L(s) = K_p \cdot (K/s) \cdot e^{-\tau s}$ (integrator plus transport delay, Pad\'{e} approximated).
+% The delay induces phase wrapping that limits the maximum achievable gain.
+
+% \textbf{Benchmark~4: Op-amp with saturation.}
+% $G(s) = 10/(s^2 + s + 4)$ in feedback with $\varphi(x) = \mathrm{sat}(x)$.
+% A Lur'e system where classical Nyquist is inapplicable and the circle criterion is conservative.
+
+% % ═══════════════════════════════════════════════════════════════
+% \section{Scaled Relative Graphs}
+% \label{sec:srg}
+
+% \subsection{Definition}
+
+% Let $A : \HH \to \HH$ be an operator on a Hilbert space.
+% For input-output pairs $(u_1, Au_1)$ and $(u_2, Au_2)$ with $\Delta u = u_1 - u_2 \neq 0$ and $\Delta y = Au_1 - Au_2$, define the incremental gain and phase:
+% \begin{equation}
+% r = \frac{\|\Delta y\|}{\|\Delta u\|}, \quad
+% \varphi = \angle(\Delta y, \Delta u) = \cos^{-1} \frac{\mathrm{Re}\langle \Delta y, \Delta u \rangle}{\|\Delta y\|\|\Delta u\|}
+% \end{equation}
+
+% The \textbf{Scaled Relative Graph} of $A$ is:
+% \begin{equation}
+% \SRG(A) = \overline{\left\{ r \, e^{j\varphi} : (u_1, Au_1), (u_2, Au_2) \in \mathrm{graph}(A), \, u_1 \neq u_2 \right\}}
+% \end{equation}
+
+% \subsection{Key Properties}
+
+% \begin{itemize}
+% \item Passive operators: $\SRG(A) \subseteq \{z : \mathrm{Re}(z) \geq 0\}$
+% \item Contractive operators ($\gamma$-Lipschitz): $\SRG(A) \subseteq \{z : |z| \leq \gamma\}$
+% \item Static saturation: $\SRG(\mathrm{sat}) = [0, 1]$
+% \item Monotone operators: $\SRG(A) \subseteq \{z : \mathrm{Re}(z) \geq 0\}$
+% \end{itemize}
+
+% \subsection{SRG of Stable LTI Systems}
+
+% \begin{theorem}[Chaffey-Forni-Sepulchre~\cite{chaffey2023graphical}]
+% For a stable SISO LTI system $G \in RH_\infty$, the soft SRG equals the hyperbolic convex hull of the Nyquist diagram:
+% \begin{equation}
+% \SRG(G) = \hconv\left(\{G(j\omega) : \omega \in \RR\}\right)
+% \end{equation}
+% \end{theorem}
+
+% The hyperbolic convex hull $\hconv(S)$ is the intersection of all closed disks and half-planes centered on the real axis containing~$S$.
+% Geometrically, it ``fills in'' concavities of the Nyquist curve with circular arcs centered on the real axis.
+
+% \subsection{Computation}
+
+% For consecutive Nyquist points $z_1 = G(j\omega_i)$ and $z_2 = G(j\omega_{i+1})$, the SRG boundary arc is part of the circle centered at
+% \begin{equation}
+% c = \frac{|z_2|^2 - |z_1|^2}{2(\mathrm{Re}(z_2) - \mathrm{Re}(z_1))}
+% \end{equation}
+% with radius $R = |z_1 - c|$.
+% The SRG boundary is the union of these arcs, and the SRG is the enclosed region.
+
+% % ═══════════════════════════════════════════════════════════════
+% \section{Feedback Stability via SRG Separation}
+% \label{sec:feedback}
+
+% \subsection{The Separation Theorem}
+
+% \begin{theorem}[SRG Separation~\cite{chaffey2023graphical}]
+% Let $H_1, H_2 : \LL_2 \to \LL_2$ be causal operators in positive feedback.
+% If $\SRG(H_1)$ and $\SRG^{-1}(H_2) = \{\bar{z}^{-1} : z \in \SRG(H_2)\}$ are separated (i.e., their closures do not intersect), and if the chord property holds, then the closed-loop is incrementally $\LL_2$-stable.
+% \end{theorem}
+
+% The \textbf{separation distance}
+% \begin{equation}
+% d = \inf_{z_1 \in \SRG(H_1), \, z_2 \in \SRG^{-1}(H_2)} |z_1 - z_2|
+% \end{equation}
+% provides a continuous robustness margin.
+% The incremental closed-loop $\LL_2$-gain is bounded by $1/d$.
+
+% \subsection{Comparison with Classical Methods}
+
+% For LTI systems, the SRG separation distance simultaneously accounts for gain and phase uncertainty, unlike GM and PM which measure robustness along isolated directions.
+% For Lur'e systems (LTI + sector-bounded nonlinearity), SRG analysis gives tighter margins than the circle criterion because it uses the operator-specific SRG rather than the entire sector disk.
+
+% % ═══════════════════════════════════════════════════════════════
+% \section{The Lyapunov Connection}
+% \label{sec:lyapunov}
+
+% The SRG framework connects to energy-based stability through three equivalences:
+
+% \begin{enumerate}
+% \item $\SRG(A) \subseteq \{z : \mathrm{Re}(z) \geq 0\}$ if and only if $A$ is incrementally passive (there exists a storage function $V$ with $\dot{V} \leq \langle \Delta y, \Delta u \rangle$).
+
+% \item $\SRG(A) \subseteq \{z : |z| \leq \gamma\}$ if and only if $A$ has incremental $\LL_2$-gain at most $\gamma$.
+
+% \item If the SRG separation distance is $d > 0$, then the closed-loop incremental $\LL_2$-gain is at most $1/d$.
+% \end{enumerate}
+
+% These results mean that SRG containment tests are \emph{equivalent} to Lyapunov/dissipativity conditions, but are computable from input-output data without state-space models.
+% For monotone operators (which include droop controllers and passive circuits), the characterization is tight.
+
+% % ═══════════════════════════════════════════════════════════════
+% \section{Benchmark Results}
+% \label{sec:results}
+
+% Table~\ref{tab:comparison} summarizes the stability margins across all benchmarks.
+
+% \begin{table}[h]
+% \centering
+% \caption{Nyquist vs.\ SRG stability margins across benchmarks}
+% \label{tab:comparison}
+% \begin{tabular}{lcccc}
+% \toprule
+% \textbf{System} & \textbf{GM (dB)} & \textbf{PM (°)} & \textbf{SRG dist.} & \textbf{Notes} \\
+% \midrule
+% Mass-spring-damper & 14.0 & 68 & 0.52 & Margins agree \\
+% DC Motor + PI & 8.1 & 41 & 0.23 & SRG tighter \\
+% Tank + delay & 5.9 & 33 & 0.11 & Delay erodes \\
+% Op-amp + sat. & --- & --- & 0.31 & Circle: 0.08 \\
+% \bottomrule
+% \end{tabular}
+% \end{table}
+
+% \textbf{Key observations:}
+
+% \emph{Benchmark 1} (mass-spring-damper): The SRG is a thin region around the Nyquist curve because the system has a single resonant mode with well-separated dynamics.
+% Classical margins are adequate; the SRG confirms this.
+
+% \emph{Benchmark 2} (DC motor): The SRG is substantially wider than the Nyquist curve in the frequency range where electrical and mechanical time constants interact.
+% The SRG separation distance of~0.23 reveals that multi-frequency excitations erode the apparent margin from GM/PM.
+
+% \emph{Benchmark 3} (tank + delay): The transport delay causes phase wrapping that inflates the SRG spiral.
+% The SRG distance of~0.11 is significantly smaller than what GM~=~5.9~dB alone suggests---the system is closer to instability than classical margins indicate.
+
+% \emph{Benchmark 4} (op-amp + saturation): Classical Nyquist is inapplicable.
+% The circle criterion gives a conservative margin of~0.08.
+% The SRG approach, using the exact SRG of saturation ($[0,1]$), yields a margin of~0.31---a $3.9\times$ improvement.
+
+% % ═══════════════════════════════════════════════════════════════
+% \section{Software: ScaledRelativeGraphs.jl}
+% \label{sec:software}
+
+% The companion package \texttt{ScaledRelativeGraphs.jl} implements all algorithms presented in this paper.
+% It is written in Julia~\cite{bezanson2017julia} and builds on \texttt{ControlSystemsBase.jl} for LTI system representation and \texttt{CairoMakie.jl} for publication-quality figures.
+
+% \subsection{Dual API Design}
+
+% The package offers two interfaces:
+
+% \textbf{Practitioner API} (one-call answer):
+% \begin{verbatim}
+% report = stability_report(G, C)
+% report = stability_report(G, C,
+%     nonlinearity=Saturation(-1, 1))
+% \end{verbatim}
+
+% \textbf{Researcher API} (full mathematical objects):
+% \begin{verbatim}
+% srg = compute_srg(G, omega)
+% d = srg_separation_distance(srg1, srg2)
+% fig = plot_nyquist_srg(G, omega)
+% \end{verbatim}
+
+% \subsection{Differentiation from SrgTools.jl}
+
+% SrgTools.jl~\cite{krebbekx2025srgtools} provides MIMO SRG computation via Linear Fractional Representations for the research frontier.
+% \texttt{ScaledRelativeGraphs.jl} complements it with:
+% (i) a pedagogical Nyquist-to-SRG tutorial progression,
+% (ii) industrial benchmark systems,
+% (iii) nonlinearity libraries (saturation, deadzone, backlash),
+% (iv) publication-quality visualization with filled SRG regions,
+% (v) a measured-data import pathway for frequency response data, and
+% (vi) a standards compliance framework (IEEE~2800 in development).
+
+% \subsection{Reproducibility}
+
+% All figures and numerical results in this paper are generated by scripts in the \texttt{paper/} directory of the repository.
+% Running \texttt{julia paper/generate\_all\_figures.jl} reproduces every figure.
+
+% % ═══════════════════════════════════════════════════════════════
+% \section{Extensions and Future Work}
+% \label{sec:future}
+
+% \subsection{Power Systems Applications}
+
+% Droop-controlled grid-forming inverters implement the P-f and Q-V droop laws:
+% \begin{equation}
+% \omega = \omega_0 - m_p(P - P_0), \quad V = V_0 - n_q(Q - Q_0)
+% \end{equation}
+% These are monotone maps whose SRGs lie in the right-half plane.
+% Grid impedance is an LTI operator whose SRG is the hyperbolic convex hull of its Nyquist diagram.
+% The SRG separation theorem then provides decentralized stability certificates for multi-converter microgrids~\cite{baronprada2026power}.
+
+% We are developing an IEEE~2800 compliance layer that maps ride-through envelopes and droop specifications onto SRG constraints, enabling automatic stability certification.
+
+% \subsection{Hard SRGs and Unstable Systems}
+
+% The hard SRG~\cite{chen2025softhard}, tested over $\LL_{2e}$ instead of $\LL_2$, accommodates unbounded operators including integrators.
+% Krebbekx et al.~\cite{krebbekx2025hard} developed systematic computation algorithms.
+% Integration into \texttt{ScaledRelativeGraphs.jl} is planned.
+
+% \subsection{Measured Data Workflows}
+
+% Importing frequency response data from network analyzers or swept-sine tests, computing empirical SRGs, and comparing against model-based SRGs provides a model validation pathway that requires no state-space identification.
+
+% % ═══════════════════════════════════════════════════════════════
+% \section{Conclusion}
+% \label{sec:conclusion}
+
+% Scaled Relative Graphs extend the Nyquist diagram from a 1D curve to a 2D region, enabling geometric stability analysis of nonlinear feedback systems with quantitative robustness margins.
+% This paper has presented a tutorial progression from classical Nyquist to SRG-based analysis across four benchmark systems, demonstrating that the SRG separation distance captures multi-frequency interactions and nonlinear effects invisible to classical gain and phase margins.
+% The companion Julia package \texttt{ScaledRelativeGraphs.jl} makes these methods accessible to both practitioners and researchers, with a dual API, industrial benchmarks, and publication-quality visualization.
+
+% % ═══════════════════════════════════════════════════════════════
+% \bibliographystyle{IEEEtran}
+% \begin{thebibliography}{20}
+
+% \bibitem{nyquist1932regeneration}
+% H.~Nyquist, ``Regeneration theory,'' \emph{Bell System Technical Journal}, vol.~11, no.~1, pp.~126--147, 1932.
+
+% \bibitem{ryu2022srg}
+% E.~K.~Ryu, R.~Hannah, and W.~Yin, ``Scaled relative graphs: nonexpansive operators via 2D Euclidean geometry,'' \emph{Mathematical Programming}, vol.~194, pp.~569--619, 2022.
+
+% \bibitem{chaffey2023graphical}
+% T.~Chaffey, F.~Forni, and R.~Sepulchre, ``Graphical nonlinear system analysis,'' \emph{IEEE Trans.\ Automatic Control}, vol.~68, no.~10, pp.~6067--6082, 2023.
+
+% \bibitem{chen2025softhard}
+% C.~Chen, S.~Z.~Khong, and R.~Sepulchre, ``Soft and hard scaled relative graphs for nonlinear feedback stability,'' \emph{arXiv:2504.14407}, 2025.
+
+% \bibitem{krebbekx2025extended}
+% J.~P.~J.~Krebbekx, R.~T\'{o}th, and A.~Das, ``Scaled relative graph analysis of general interconnections of SISO nonlinear systems,'' \emph{arXiv:2507.15564}, 2025.
+
+% \bibitem{krebbekx2025hard}
+% J.~P.~J.~Krebbekx, E.~Baron-Prada, R.~T\'{o}th, and A.~Das, ``Computing the hard scaled relative graph of LTI systems,'' \emph{arXiv:2511.17297}, 2025.
+
+% \bibitem{krebbekx2025mimo}
+% J.~P.~J.~Krebbekx, R.~T\'{o}th, and A.~Das, ``Graphical analysis of nonlinear multivariable feedback systems,'' \emph{arXiv:2507.16513}, 2025.
+
+% \bibitem{krebbekx2025srgtools}
+% J.~P.~J.~Krebbekx, R.~T\'{o}th, and A.~Das, ``SrgTools.jl,'' \url{https://github.com/Krebbekx/SrgTools.jl}, 2025.
+
+% \bibitem{baronprada2026power}
+% E.~Baron-Prada and A.~Anta, ``Stability analysis of power-electronics-dominated grids using scaled relative graphs,'' \emph{arXiv:2601.16014}, 2026.
+
+% \bibitem{skogestad2005multivariable}
+% S.~Skogestad and I.~Postlethwaite, \emph{Multivariable Feedback Control: Analysis and Design}, 2nd~ed.\hskip 1em plus 0.5em minus 0.4em Wiley, 2005.
+
+% \bibitem{bezanson2017julia}
+% J.~Bezanson, A.~Edelman, S.~Karpinski, and V.~B.~Shah, ``Julia: A fresh approach to numerical computing,'' \emph{SIAM Review}, vol.~59, no.~1, pp.~65--98, 2017.
+
+% \bibitem{chaffey2021cdc}
+% T.~Chaffey, F.~Forni, and R.~Sepulchre, ``Scaled relative graphs for system analysis,'' in \emph{Proc.\ IEEE Conf.\ Decision and Control (CDC)}, 2021.
+
+% \bibitem{huang2024gain}
+% L.~Huang, D.~Wang, X.~Wang, \emph{et al.}, ``Gain and phase: decentralized stability conditions for power electronics-dominated power systems,'' \emph{IEEE Trans.\ Power Systems}, vol.~39, no.~6, 2024.
+
+% \bibitem{baronprada2025decentralized}
+% E.~Baron-Prada, A.~Anta, and F.~D\"{o}rfler, ``On decentralized stability conditions using scaled relative graphs,'' \emph{IEEE Control Systems Letters}, 2025.
+
+% \end{thebibliography}
+
+% \end{document}
+

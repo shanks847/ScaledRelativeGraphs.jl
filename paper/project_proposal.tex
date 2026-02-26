@@ -1,0 +1,83 @@
+\documentclass[11pt]{article}
+
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{geometry}
+\usepackage{booktabs}
+\geometry{margin=1in}
+
+\title{\textbf{A Standards-Aligned Scaled Relative Graph Framework for Stability Certification Across Industrial Domains}}
+
+\author{
+Shankar Ramharack \\
+Electrical and Computer Engineering \\
+TTLAB
+}
+
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+
+Modern industrial and power systems operate under increasingly stringent regulatory, safety, and cybersecurity constraints while simultaneously facing reduced system inertia, weak grid conditions, and higher controller complexity. Although the Scaled Relative Graph (SRG) provides a rigorous geometric framework for characterizing stability and robustness of operator interconnections, its application remains largely confined to mathematical analysis and optimization theory. This project proposes the development of a standards-aligned SRG compliance framework that systematically maps geometric robustness metrics to regulatory requirements across multiple industrial sectors, including inverter-dominated power systems, process industries, machinery safety, and industrial cybersecurity. Implemented in \texttt{ScaledRelativeGraphs.jl}, the proposed architecture introduces a compliance abstraction layer that transforms SRG separation margins, contraction radii, and passivity certificates into actionable engineering assessments aligned with IEEE 2800, IEC 61508, IEC 61511, ISO 13849, IEC 62061, IEC 62443, and related standards. The framework aims to bridge advanced operator-theoretic stability analysis and regulatory certification workflows, providing a unified geometric foundation for compliance-oriented stability assessment.
+
+\end{abstract}
+
+\section{Introduction}
+
+Industrial control systems are undergoing structural transformation driven by inverter-based resources, digital automation, distributed control architectures, and increasing cyber-physical integration. In electric power systems, grid-forming and grid-following inverters now operate in environments characterized by low short-circuit ratios and reduced electromechanical damping. In process industries, safety-instrumented systems must maintain deterministic stability under fault conditions. In manufacturing and machinery domains, control loops must satisfy performance levels and safety integrity constraints while interacting with programmable logic controllers and supervisory systems. Across all sectors, industrial cybersecurity standards increasingly require demonstrable resilience to destabilizing perturbations.
+
+Despite these cross-sector requirements, stability assessment tools remain fragmented. Eigenvalue analysis, Nyquist plots, and time-domain electromagnetic transient simulations provide important insights but do not naturally translate into regulatory-aligned compliance statements. Existing workflows require engineers to manually interpret margins and correlate them with standard-specific criteria. This gap motivates the central question of this project: can geometric stability theory be elevated from a mathematical tool to a regulatory compliance engine?
+
+The Scaled Relative Graph offers a promising foundation for this transformation. By representing operators as subsets of the complex plane derived from scaled input-output relations, SRG reduces feedback stability to geometric separation conditions. Robustness, contraction, and passivity properties appear directly as geometric invariants. However, the connection between these invariants and standards such as IEEE 2800 for inverter-based resource interconnection, IEC 61508 for functional safety, IEC 61511 for process industries, ISO 13849 and IEC 62061 for machinery safety, and IEC 62443 for industrial cybersecurity has not yet been formalized. This project proposes a unified compliance abstraction layer that performs this translation systematically.
+
+\section{Geometric Stability Foundations}
+
+For an operator $T$, the Scaled Relative Graph $\mathcal{S}(T) \subset \mathbb{C}$ captures the relationship between input and output increments under scaling transformations. For a feedback interconnection involving operator $G$, stability reduces to the geometric condition that the SRG of $G$ avoids the critical point $-1$ in the complex plane. In particular, closed-loop stability is guaranteed if
+\[
+\mathcal{S}(G) \cap (-1) = \emptyset.
+\]
+
+This geometric representation enables direct computation of robustness metrics. The minimum separation distance to the instability point,
+\[
+d_{\min} = \inf_{z \in \mathcal{S}} |z + 1|,
+\]
+acts as a robustness margin. Hyperbolic convex hull constructions capture uncertainty envelopes. Contraction properties correspond to radial scaling bounds. Imaginary-axis proximity provides oscillatory energy proxies. These geometric quantities are deterministic and compositional, making them particularly well suited to modular compliance analysis.
+
+\section{Cross-Industry Regulatory Context}
+
+In power systems, IEEE 2800-2022 establishes interconnection and interoperability requirements for inverter-based resources, including ride-through envelopes, damping thresholds, and performance under weak grid conditions. Compliance traditionally requires EMT validation and parametric studies across short-circuit ratios. In process industries, IEC 61508 and IEC 61511 impose lifecycle-based functional safety requirements and demand that control systems demonstrate stability consistent with allocated Safety Integrity Levels. In machinery safety, ISO 13849 and IEC 62061 define performance levels and SIL-equivalent requirements for safety-related control parts. Meanwhile, IEC 62443 mandates cybersecurity risk mitigation for industrial automation and control systems, implicitly requiring resilience against destabilizing cyber-physical perturbations. Standards such as IEC 61131 and ISA-95 govern programmable controller architectures and enterprise-control integration, indirectly influencing stability by constraining system design and communication structure.
+
+Across these industries, stability is foundational but not directly quantified in regulatory language. Engineers must interpret gain margins, phase margins, damping ratios, and simulation outcomes relative to standard clauses. A formal mapping from geometric stability invariants to regulatory performance requirements remains absent.
+
+\section{Standards-Aligned SRG Compliance Architecture}
+
+The proposed framework introduces a three-layer architecture. The first layer consists of the geometric engine, which computes SRG sets, hyperbolic convex hulls, separation distances, and contraction factors. The second layer extracts standardized robustness metrics such as minimum separation, oscillatory energy proxies, and uncertainty tolerance radii. The third layer implements a compliance abstraction, wherein these metrics are mapped to domain-specific regulatory thresholds.
+
+In the context of IEEE 2800, voltage ride-through events are modeled as multiplicative scaling operators acting on the plant, producing scaled SRG sets. Stability under a voltage sag condition $\alpha$ is guaranteed if $\alpha \mathcal{S}(G)$ avoids the critical point. This produces a closed-form admissible sag region and allows computation of minimum short-circuit ratio bounds via SRG composition with grid impedance operators. Rather than conducting repeated EMT simulations, engineers obtain analytical stability envelopes derived directly from geometry.
+
+For functional safety under IEC 61508 and IEC 61511, instability contributes to hazardous failure probability. While SIL certification requires probabilistic lifecycle analysis, SRG separation margins provide deterministic upper bounds on instability likelihood under bounded perturbations. The framework introduces a Stability Risk Contribution Index derived from geometric margins and contraction factors, offering structured evidence to support SIL justification without claiming certification authority.
+
+In machinery safety contexts governed by ISO 13849 and IEC 62061, oscillatory instability and loop interaction can compromise performance level targets. SRG-based interaction radii and monotonicity certificates provide explicit guarantees of bounded loop gain and anti-windup robustness. These geometric certificates can be incorporated into performance level validation documentation.
+
+Within the cybersecurity domain of IEC 62443, destabilizing attacks can be modeled as additive perturbation operators. The SRG representation enables computation of the minimum perturbation magnitude required to intersect the instability point. This quantity defines a destabilization radius, directly interpretable as a resilience margin against malicious or accidental disturbances. Such a metric offers a novel quantitative contribution to cyber-physical risk analysis.
+
+\section{Design and Implementation Strategy}
+
+The implementation will extend \texttt{ScaledRelativeGraphs.jl} with modular compliance components. The geometry core will remain independent of regulatory semantics. A metrics layer will compute invariant quantities from SRG sets, including separation distance, contraction bounds, and hyperbolic hull width. The compliance layer will define abstract standard interfaces that accept metric structures and produce structured compliance reports. Each standard module will encode threshold criteria and mapping logic without embedding geometric computation directly, preserving modularity.
+
+The framework will support both model-based and data-driven workflows. Measured frequency response data can be converted to SRG sets, enabling compliance evaluation directly from field measurements. Integration with EMT solvers will allow cross-validation between geometric predictions and time-domain simulations. Automated report generation will produce regulatory-aligned verdicts summarizing stability margins, minimum SCR, ride-through admissibility, and resilience radii.
+
+\section{Research Contributions}
+
+This project aims to deliver the first regulatory-aligned SRG compliance abstraction spanning multiple industrial sectors. It will formalize closed-form minimum SCR computation via SRG geometry, introduce geometric ride-through admissibility regions, define a deterministic stability risk contribution index for functional safety support, and propose a destabilization radius metric for cybersecurity resilience analysis. The open-source implementation will provide reproducible workflows for inverter-dominated industrial systems and serve as a foundation for further research in nonlinear and probabilistic SRG extensions.
+
+\section{Conclusion}
+
+The proposed research bridges advanced operator-theoretic stability analysis and real-world regulatory compliance engineering. By embedding standards-aware abstractions within SRG geometry, the framework transforms stability analysis from an interpretive engineering exercise into a structured certification-support tool. The resulting system positions geometric control theory as a foundational engine for compliance assessment across power systems, process industries, machinery safety, and industrial cybersecurity, establishing a unified methodology for robust stability certification in modern industrial environments.
+
+\end{document}
